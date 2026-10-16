@@ -102,6 +102,7 @@ menu a:hover { background:var(--fond-leger); }
 menu b { color:var(--texte-normal); font-weight:400; }
 menu span { color:var(--texte-clair); float:right; }
 
+.team { margin:12px 0 0; padding:8px 12px; border:1px solid var(--fond-present); border-radius:5px; }
 .joueurs { list-style:none; padding:0; margin:14px 0 0; }
 .joueurs li { border:1px dotted var(--filigrane); border-radius:5px; padding:6px 12px; margin-bottom:6px; }
 .joueurs li.me { border:1px solid var(--fond-present); }

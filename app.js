@@ -30,6 +30,7 @@ const state = {
   others: {},
   net: null,
   locked: false, // saisie bloquée pendant une animation
+  synced: false, // premier état réseau reçu
 };
 
 let keys = [];
@@ -42,6 +43,7 @@ async function init() {
     fetch("grids.json" + V).then((r) => r.json()),
   ]);
   state.gridData = gridData;
+  loadConfetti();
   state.trie = new PrefixTrie(wordsTxt.split("\n").filter(Boolean));
   state.letters = [...gridForDay(gridData, state.day)];
   state.solutions = solve(state.letters, state.trie);
@@ -219,13 +221,26 @@ function bravo(text, gold) {
   setTimeout(() => hide(b), 950);
 }
 
-function confetti() {
-  const run = () => window.confetti && window.confetti();
-  if (window.confetti) return run();
-  const s = document.createElement("script");
-  s.src = "https://cdnjs.cloudflare.com/ajax/libs/canvas-confetti/1.9.2/confetti.browser.min.js";
-  s.onload = run;
-  document.head.appendChild(s);
+// La bibliothèque est chargée dès le départ pour que les confettis partent sans délai.
+let confettiReady;
+function loadConfetti() {
+  confettiReady ??= new Promise((resolve) => {
+    const s = document.createElement("script");
+    s.src = "https://cdnjs.cloudflare.com/ajax/libs/canvas-confetti/1.9.2/confetti.browser.min.js";
+    s.onload = () => resolve(window.confetti);
+    s.onerror = () => resolve(null);
+    document.head.appendChild(s);
+  });
+  return confettiReady;
+}
+
+async function confetti() {
+  const fire = await loadConfetti();
+  if (!fire) return;
+  const burst = (origin) => fire({ particleCount: 90, spread: 70, startVelocity: 45, origin });
+  burst({ x: 0.2, y: 0.7 });
+  burst({ x: 0.8, y: 0.7 });
+  setTimeout(() => burst({ x: 0.5, y: 0.5 }), 250);
 }
 
 // ---------- Validation ----------
@@ -250,9 +265,9 @@ function submit() {
     render();
     publish();
     bravo(`${pts > 6 ? "Super" : pts > 4 ? "Bravo" : "Bien"} ! <b>+${pts}</b>`, pts > 6);
-    if (after > before && after === GENIAL) {
+    if (before < GENIAL && after >= GENIAL) {
       confetti();
-      message(`Victoire !<br>C'est ${LEVELS[after]}`, 6000);
+      message(`Victoire !<br>C'est ${LEVELS[GENIAL]}`, 6000);
     } else if (state.found.length === state.solutions.length) {
       confetti();
       message("C'est fini !<br><br>¯\\_(ツ)_/¯", 6000);
@@ -392,7 +407,11 @@ async function startNetwork() {
   }
   if (!state.net) { tag.textContent = "(mode solo : Firebase non configuré)"; return; }
   tag.textContent = "(en ligne)";
-  state.net.subscribe(state.day, (players) => { state.others = players; renderPlayers(); });
+  state.net.subscribe(state.day, (players) => {
+    state.others = players;
+    renderPlayers();
+    state.synced = true;
+  });
   publish();
 }
 
@@ -404,23 +423,41 @@ function publish() {
   }).catch((e) => console.error(e));
 }
 
+// Jeu coopératif : pas de classement, l'équipe joue ensemble contre la grille.
+let teamDone = null; // null tant qu'on n'a pas vu l'état initial, pour ne pas fêter une grille déjà terminée
+
 function renderPlayers() {
-  const s = score(), myLevel = levelFor(s, state.thresholds), canSee = myLevel >= GENIAL;
+  const myLevel = levelFor(score(), state.thresholds), canSee = myLevel >= GENIAL;
   const myUid = state.net?.uid;
-  const list = Object.entries(state.others).map(([uid, p]) => ({ uid, ...p }));
-  if (!myUid) list.push({ uid: "me", name: state.name, score: s, level: myLevel, words: state.found.join(" ") });
-  list.sort((a, b) => b.score - a.score);
-  $("players-list").innerHTML = list.map((p) => {
-    const me = p.uid === myUid || p.uid === "me";
-    const words = (p.words || "").split(" ").filter(Boolean);
-    let detail = "";
-    if (!me) {
-      detail = canSee
-        ? `<p class="theirs">${words.map((w) => (state.found.includes(w) ? cap(w) : `<mark>${cap(w)}</mark>`)).join(" ") || "—"}</p>`
-        : `<p class="locked">Atteignez « ${LEVELS[GENIAL]} » pour voir leurs mots.</p>`;
-    }
-    return `<li class="${me ? "me" : ""}"><div class="head"><b>${esc(p.name)}${me ? " (vous)" : ""}</b>` +
-      `<span>${LEVELS[p.level] ?? ""} · ${plural(words.length, "mot")} · ${p.score} pt</span></div>${detail}</li>`;
+  const split = (p) => (p.words || "").split(" ").filter(Boolean);
+  const others = Object.entries(state.others).filter(([uid]) => uid !== myUid).map(([uid, p]) => ({ uid, ...p }));
+  others.sort((a, b) => String(a.name).localeCompare(String(b.name), "fr"));
+
+  // Mots de toute l'équipe : les miens (toujours à jour localement) plus ceux des autres.
+  const team = new Set(state.found);
+  for (const p of others) for (const w of split(p)) if (state.solutions.includes(w)) team.add(w);
+  const teamPoints = [...team].reduce((s, w) => s + wordPoints(w), 0);
+  const remaining = state.solutions.length - team.size;
+  $("team").innerHTML = `<b>Ensemble</b> : ${team.size} mots sur ${state.solutions.length} · ${teamPoints} points sur ${state.total}` +
+    (remaining ? ` · encore ${remaining} à trouver` : " · grille terminée !");
+
+  const done = remaining === 0 && state.solutions.length > 0;
+  // On ne fête que la fin obtenue grâce aux autres, une fois l'état réseau reçu (jamais à l'arrivée).
+  const iFinished = state.found.length === state.solutions.length;
+  if (state.net && state.synced && teamDone === false && done && !iFinished) {
+    confetti();
+    message("Grille terminée<br>tous ensemble !", 6000);
+  }
+  teamDone = done;
+
+  const row = (name, words, me, detail) =>
+    `<li class="${me ? "me" : ""}"><div class="head"><b>${esc(name)}${me ? " (vous)" : ""}</b><span>${plural(words, "mot")}</span></div>${detail}</li>`;
+  $("players-list").innerHTML = row(state.name, state.found.length, true, "") + others.map((p) => {
+    const words = split(p);
+    const detail = canSee
+      ? `<p class="theirs">${words.map((w) => (state.found.includes(w) ? cap(w) : `<mark>${cap(w)}</mark>`)).join(" ") || "—"}</p>`
+      : `<p class="locked">Atteignez « ${LEVELS[GENIAL]} » pour voir leurs mots.</p>`;
+    return row(p.name, words.length, false, detail);
   }).join("");
 }
 

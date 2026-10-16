@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>LaBOG multijoueur</title>
-<link rel="stylesheet" href="style.css?v=78042fe0">
+<link rel="stylesheet" href="style.css?v=2bdb6bcd">
 </head>
 <body>
 <svg width="0" height="0" style="position:absolute" aria-hidden="true">
@@ -21,7 +21,7 @@
   <header>
     <div><div class="icone" id="open-menu" role="button" aria-label="Menu"><svg><use href="#i-menu"/></svg></div></div>
     <h1>LaBOG</h1>
-    <div><div class="icone" id="open-players" role="button" aria-label="Joueurs"><svg><use href="#i-chat"/></svg></div></div>
+    <div><div class="icone" id="open-players" role="button" aria-label="Équipe"><svg><use href="#i-chat"/></svg></div></div>
   </header>
 
   <main id="content"><div id="inside"><p class="reponses" id="reponses"></p></div></main>
@@ -55,7 +55,7 @@
     <div class="bloc"><menu>
       <li><a data-open="instructions"><b>Comment jouer ?</b> <span>(la règle du jeu)</span></a></li>
       <li><a data-open="informations"><b>Informations</b> <span>(sur la partie en cours)</span></a></li>
-      <li><a data-open="players"><b>Joueurs</b> <span>(classement du jour)</span></a></li>
+      <li><a data-open="players"><b>Équipe</b> <span>(qui joue aujourd'hui)</span></a></li>
       <li><a data-open="solutions"><b>Solutions</b> <span>(de la partie précédente)</span></a></li>
     </menu></div>
     <div class="bloc"><menu>
@@ -83,7 +83,7 @@
       <li>Une lettre grisée n'est plus contenue dans aucun mot restant.</li>
     </ul></div>
     <div class="bloc"><h4>Multijoueur</h4><ul>
-      <li>Tout le monde joue la même grille. À partir du niveau « Génial », vous voyez les mots trouvés par les autres.</li>
+      <li>Tout le monde joue la même grille, ensemble contre la grille : il n'y a pas de classement. À partir du niveau « Génial », vous voyez les mots trouvés par les autres.</li>
     </ul></div>
   </div>
 
@@ -101,7 +101,8 @@
   </div>
 
   <div class="popup" id="players">
-    <div class="header"><h2>Joueurs <span id="net-state"></span></h2><div class="icone ferme" role="button"><svg><use href="#i-close"/></svg></div></div>
+    <div class="header"><h2>Équipe <span id="net-state"></span></h2><div class="icone ferme" role="button"><svg><use href="#i-close"/></svg></div></div>
+    <p id="team" class="team"></p>
     <ul id="players-list" class="joueurs"></ul>
   </div>
 
@@ -112,7 +113,7 @@
   </div>
 </div>
 
-<script type="importmap">{"imports":{"./game.js":"./game.js?v=78042fe0","./net.js":"./net.js?v=78042fe0","./firebase-config.js":"./firebase-config.js?v=78042fe0"}}</script>
-<script type="module" src="app.js?v=78042fe0"></script>
+<script type="importmap">{"imports":{"./game.js":"./game.js?v=2bdb6bcd","./net.js":"./net.js?v=2bdb6bcd","./firebase-config.js":"./firebase-config.js?v=2bdb6bcd"}}</script>
+<script type="module" src="app.js?v=2bdb6bcd"></script>
 </body>
 </html>
