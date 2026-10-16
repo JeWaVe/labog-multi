@@ -1,6 +1,6 @@
 import {
-  LEVELS, GENIAL, MIN_LEN, PrefixTrie, solve, wordPoints, areAdjacent,
-  dayNumber, gridForDay, computeLevels, levelFor, counters,
+  LEVELS, GENIAL, MIN_LEN, MAX_LEN, PrefixTrie, solve, wordPoints, areAdjacent,
+  dayNumber, gridForDay, computeLevels, levelFor,
 } from "./game.js";
 import { connect } from "./net.js";
 
@@ -13,19 +13,27 @@ const store = {
 };
 const plural = (n, s) => `${n} ${s}${n > 1 ? "s" : ""}`;
 const cap = (w) => w[0] + w.slice(1).toLowerCase();
+const esc = (t) => String(t).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
 
 const state = {
   day: dayNumber(),
+  gridData: null,
+  trie: null,
   letters: [],
   solutions: [],
   thresholds: [],
   total: 0,
   found: [],
+  failed: [],
   sel: [],
   name: "",
   others: {},
   net: null,
+  locked: false, // saisie bloquée pendant une animation
 };
+
+let keys = [];
+let cases = [];
 
 // ---------- Initialisation ----------
 async function init() {
@@ -33,9 +41,10 @@ async function init() {
     fetch("words.txt" + V).then((r) => r.text()),
     fetch("grids.json" + V).then((r) => r.json()),
   ]);
-  const trie = new PrefixTrie(wordsTxt.split("\n").filter(Boolean));
+  state.gridData = gridData;
+  state.trie = new PrefixTrie(wordsTxt.split("\n").filter(Boolean));
   state.letters = [...gridForDay(gridData, state.day)];
-  state.solutions = solve(state.letters, trie);
+  state.solutions = solve(state.letters, state.trie);
   const lv = computeLevels(state.solutions);
   state.thresholds = lv.thresholds;
   state.total = lv.total;
@@ -46,6 +55,7 @@ async function init() {
 
   buildBoard();
   bindControls();
+  fillInformations();
   render();
   startNetwork();
 }
@@ -58,166 +68,289 @@ function askName() {
 }
 
 // ---------- Plateau et saisie ----------
-let cells = [];
 function buildBoard() {
-  const board = $("board");
-  board.innerHTML = "";
-  cells = state.letters.map((ch, i) => {
-    const b = document.createElement("button");
-    b.className = "cell";
-    b.dataset.i = i;
-    board.appendChild(b);
-    return b;
-  });
-  let dragging = false;
-  const cellAt = (e) => {
+  $("plateau").innerHTML = Array.from({ length: MAX_LEN }, () => '<div class="case"></div>').join("");
+  cases = [...$("plateau").children];
+
+  const grid = $("grid");
+  grid.innerHTML = state.letters.map((_, i) => `<button id="key${i}"></button>`).join("");
+  keys = [...grid.children];
+
+  let gesture = false; // un geste est en cours sur la grille
+  let dragged = false; // ce geste a ajouté des lettres en glissant
+
+  const keyAt = (e) => {
     const el = document.elementFromPoint(e.clientX, e.clientY);
-    if (!el || !el.classList.contains("cell")) return null;
-    const r = el.getBoundingClientRect();
-    // tolérance : il faut viser le centre de la case pour éviter les diagonales accidentelles
+    const btn = el && el.closest && el.closest("#grid button");
+    if (!btn) return null;
+    const r = btn.getBoundingClientRect();
+    // il faut viser le centre de la touche pour éviter les diagonales accidentelles
     const dx = Math.abs(e.clientX - (r.left + r.right) / 2), dy = Math.abs(e.clientY - (r.top + r.bottom) / 2);
-    return dx < r.width * 0.32 && dy < r.height * 0.32 ? +el.dataset.i : null;
+    return dx < r.width * 0.32 && dy < r.height * 0.32 ? keys.indexOf(btn) : null;
   };
-  board.addEventListener("pointerdown", (e) => {
-    const i = cellAt(e);
+
+  grid.addEventListener("pointerdown", (e) => {
+    if (state.locked) return;
+    const i = keyAt(e);
     if (i === null) return;
-    board.setPointerCapture(e.pointerId);
-    dragging = false;
-    if (state.sel.length === 0) { state.sel = [i]; dragging = true; }
-    else if (i === state.sel[state.sel.length - 1]) state.sel.pop();
-    else if (canAdd(i)) { state.sel.push(i); dragging = true; }
-    renderSelection();
+    grid.setPointerCapture(e.pointerId);
+    gesture = true;
+    dragged = false;
+    if (i === state.sel[state.sel.length - 1]) state.sel.pop();
+    else if (canAdd(i)) state.sel.push(i);
+    renderPlay();
   });
-  board.addEventListener("pointermove", (e) => {
-    if (!dragging || e.buttons === 0 && e.pointerType === "mouse") return;
-    const i = cellAt(e);
+  grid.addEventListener("pointermove", (e) => {
+    if (!gesture || state.locked) return;
+    const i = keyAt(e);
     if (i === null) return;
     const n = state.sel.length;
-    if (n > 1 && i === state.sel[n - 2]) { state.sel.pop(); renderSelection(); }
-    else if (canAdd(i)) { state.sel.push(i); renderSelection(); }
+    if (n > 1 && i === state.sel[n - 2]) { state.sel.pop(); renderPlay(); }
+    else if (canAdd(i)) { state.sel.push(i); dragged = true; renderPlay(); }
   });
-  board.addEventListener("pointerup", () => {
-    if (dragging && state.sel.length >= 2) submit();
-    dragging = false;
-  });
+  const end = () => {
+    // on ne valide au relâchement qu'après un glissé ; un simple appui ne valide jamais
+    if (gesture && dragged && state.sel.length >= 2) submit();
+    gesture = false;
+    dragged = false;
+  };
+  grid.addEventListener("pointerup", end);
+  grid.addEventListener("pointercancel", () => { gesture = false; dragged = false; });
 }
 
 function canAdd(i) {
-  if (state.sel.includes(i)) return false;
+  if (state.sel.length >= MAX_LEN || state.sel.includes(i)) return false;
   return state.sel.length === 0 || areAdjacent(state.sel[state.sel.length - 1], i);
 }
 const currentWord = () => state.sel.map((i) => state.letters[i]).join("");
+const remainingWords = () => state.solutions.filter((w) => !state.found.includes(w));
 
 function bindControls() {
   $("enter").onclick = submit;
-  $("back").onclick = () => { state.sel.pop(); renderSelection(); };
+  $("back").onclick = back;
   $("shuffle").onclick = rotate;
   $("share").onclick = share;
-  $("rename").onclick = () => { state.name = askName(); publish(); render(); };
+  $("menu-share").onclick = () => { closePopups(); share(); };
+  $("menu-rename").onclick = () => { state.name = askName(); $("pseudo").textContent = `(${state.name})`; publish(); renderPlayers(); };
+  $("pseudo").textContent = `(${state.name})`;
+  $("open-menu").onclick = () => openPopup("menu");
+  $("open-players").onclick = () => openPopup("players");
+  document.querySelectorAll("[data-open]").forEach((a) => (a.onclick = () => openPopup(a.dataset.open)));
+  document.querySelectorAll(".ferme").forEach((b) => (b.onclick = closePopups));
+  $("message").onclick = () => hide($("message"));
   document.addEventListener("keydown", (e) => {
+    if (e.key === "Escape") { if (document.querySelector(".popup.open")) closePopups(); else { state.sel = []; renderPlay(); } return; }
+    if (document.querySelector(".popup.open")) return;
     if (e.key === "Enter") submit();
-    else if (e.key === "Backspace") { state.sel.pop(); renderSelection(); }
-    else if (e.key === "Escape") { state.sel = []; renderSelection(); }
+    else if (e.key === "Backspace") back();
   });
 }
 
+function back() {
+  if (state.locked) return;
+  state.sel.pop();
+  renderPlay();
+}
+
 function rotate() {
-  if (state.sel.length) return;
+  if (state.sel.length || state.locked) return;
   const L = state.letters, out = [];
   for (let r = 0; r < 4; r++) for (let c = 0; c < 4; c++) out[r * 4 + c] = L[(3 - c) * 4 + r];
   state.letters = out;
-  const board = $("board");
-  board.classList.add("shake");
-  setTimeout(() => { board.classList.remove("shake"); renderBoard(); }, 400);
+  $("grid").classList.add("shake");
+  setTimeout(() => { $("grid").classList.remove("shake"); renderPlay(); }, 400);
+}
+
+// ---------- Popups et messages ----------
+const show = (el) => (el.style.display = "block");
+const hide = (el) => (el.style.display = "none");
+function openPopup(id) {
+  closePopups();
+  if (id === "solutions") fillSolutions();
+  if (id === "players") renderPlayers();
+  $(id).classList.add("open");
+  $(id).scrollTop = 0;
+}
+function closePopups() {
+  document.querySelectorAll(".popup.open").forEach((p) => p.classList.remove("open"));
+}
+
+let msgTimer;
+function message(text, ms = 1500) {
+  const m = $("message");
+  m.innerHTML = text;
+  show(m);
+  clearTimeout(msgTimer);
+  msgTimer = setTimeout(() => hide(m), ms);
+}
+
+function bravo(text, gold) {
+  const b = $("bravo");
+  b.innerHTML = `<span class="${gold ? "sept" : ""}">${text}</span>`;
+  b.style.animation = "none";
+  void b.offsetWidth; // relance l'animation
+  b.style.animation = "";
+  show(b);
+  setTimeout(() => hide(b), 950);
+}
+
+function confetti() {
+  const run = () => window.confetti && window.confetti();
+  if (window.confetti) return run();
+  const s = document.createElement("script");
+  s.src = "https://cdnjs.cloudflare.com/ajax/libs/canvas-confetti/1.9.2/confetti.browser.min.js";
+  s.onload = run;
+  document.head.appendChild(s);
 }
 
 // ---------- Validation ----------
-let msgTimer;
-function say(text, good = false) {
-  const m = $("message");
-  m.textContent = text;
-  m.className = good ? "good" : "";
-  clearTimeout(msgTimer);
-  msgTimer = setTimeout(() => (m.textContent = ""), 1800);
-}
-
 function submit() {
   const w = currentWord();
-  if (!w) return;
-  if (w.length < MIN_LEN) return fail("Trop court");
-  if (state.found.includes(w)) return fail("Déjà trouvé");
-  if (!state.solutions.includes(w)) return fail("Mot incorrect");
+  if (state.locked || !w) return;
+  if (w.length < MIN_LEN) return reject("Trop court", false);
+  if (state.found.includes(w)) return reject("Déjà trouvé", false);
+  if (!state.solutions.includes(w)) return reject("Mot incorrect", true);
+
   const before = levelFor(score(), state.thresholds);
   state.found = [...state.found, w].sort();
   store.set(`labog:${state.day}:found`, JSON.stringify(state.found));
   const pts = wordPoints(w);
-  say(`${pts >= 7 ? "Super" : pts >= 5 ? "Bravo" : "Bien"} ! +${pts}`, true);
-  state.sel = [];
   const after = levelFor(score(), state.thresholds);
-  if (after > before) say(`Niveau : ${LEVELS[after]}`, true);
+
+  state.locked = true;
+  cases.forEach((c, i) => i < w.length && c.classList.add("filled-ok"));
+  setTimeout(() => {
+    state.locked = false;
+    state.sel = [];
+    render();
+    publish();
+    bravo(`${pts > 6 ? "Super" : pts > 4 ? "Bravo" : "Bien"} ! <b>+${pts}</b>`, pts > 6);
+    if (after > before && after === GENIAL) {
+      confetti();
+      message(`Victoire !<br>C'est ${LEVELS[after]}`, 6000);
+    } else if (state.found.length === state.solutions.length) {
+      confetti();
+      message("C'est fini !<br><br>¯\\_(ツ)_/¯", 6000);
+    }
+  }, 300);
   render();
-  publish();
 }
-function fail(msg) {
-  say(msg);
-  state.sel = [];
-  renderSelection();
+
+function reject(text, remember) {
+  if (remember) {
+    const w = currentWord();
+    if (!state.failed.includes(w)) state.failed.push(w);
+  }
+  state.locked = true;
+  cases.forEach((c, i) => i < state.sel.length && c.classList.add("filled-ko"));
+  message(text, 750);
+  setTimeout(() => {
+    state.locked = false;
+    state.sel = [];
+    renderPlay();
+    renderFound();
+  }, 750);
 }
 
 const score = () => state.found.reduce((s, w) => s + wordPoints(w), 0);
 
 // ---------- Rendu ----------
 function render() {
-  renderBoard();
+  renderPlay();
   renderStatus();
-  renderCounters();
   renderFound();
   renderPlayers();
 }
 
-function renderBoard() {
-  const c = counters(state.solutions, state.found);
-  // Une lettre est grisée quand plus aucun mot restant ne la contient (pas seulement en initiale).
-  const remaining = state.solutions.filter((w) => !state.found.includes(w));
-  cells.forEach((b, i) => {
-    const ch = state.letters[i];
-    const startingWith = (c.byLetter[ch]?.total ?? 0) - (c.byLetter[ch]?.found ?? 0);
-    b.innerHTML = `${ch}<em>${startingWith}</em>`;
-    b.classList.toggle("zero", !remaining.some((w) => w.includes(ch)));
+/** Plateau (mot en cours) et touches, avec les compteurs permanents de mots restants. */
+function renderPlay() {
+  const remaining = remainingWords();
+  const word = currentWord();
+  const last = state.sel.length ? state.sel[state.sel.length - 1] : -1;
+
+  // Cases du mot : lettre saisie + nombre de mots restants de cette longueur (dès 4 lettres).
+  cases.forEach((c, n) => {
+    const left = remaining.filter((w) => w.length === n + 1).length;
+    const letter = word[n] ?? "";
+    c.className = "case" + (letter ? " filled" : "");
+    c.innerHTML = letter + (n + 1 >= MIN_LEN ? `<em>${left}</em>` : "");
+    if (n === state.sel.length && !state.locked) c.innerHTML += "<span class='curseur'>_</span>";
   });
-  renderSelection();
+
+  // Touches : nombre de mots restants commençant par la lettre ; lettre grisée si plus aucun mot restant ne la contient.
+  keys.forEach((k, i) => {
+    const ch = state.letters[i];
+    const starting = remaining.filter((w) => w[0] === ch).length;
+    let cls = "key-yes";
+    if (i === last) cls = "key-last";
+    else if (state.sel.includes(i)) cls = "key-played";
+    else if (!canAdd(i)) cls = "key-no";
+    if (!remaining.some((w) => w.includes(ch))) {
+      if (cls === "key-yes") cls = "key-zero";
+      else if (cls === "key-no") cls += " key-zero";
+    }
+    k.className = cls;
+    k.innerHTML = `${ch}<em>${starting}</em>`;
+  });
+
+  $("shuffle").className = state.sel.length ? "disable" : "";
+  renderFound();
+  drawTrace();
 }
 
-function renderSelection() {
-  cells.forEach((b, i) => {
-    b.classList.toggle("sel", state.sel.includes(i));
-    b.classList.toggle("last", state.sel[state.sel.length - 1] === i);
+function drawTrace() {
+  const pts = state.sel.map((i) => {
+    const k = keys[i];
+    return `${k.offsetLeft + k.offsetWidth / 2},${k.offsetTop + k.offsetHeight / 2}`;
   });
-  $("current").textContent = currentWord() || " ";
+  document.querySelector("#svgTrace path").setAttribute("d", pts.length ? `M ${pts.join(" L ")}` : "M 0,0");
 }
 
 function renderStatus() {
   const s = score(), lv = levelFor(s, state.thresholds);
-  $("level").textContent = LEVELS[lv];
-  $("words").textContent = plural(state.found.length, "mot");
-  $("score").textContent = plural(s, "point");
-  $("progress").innerHTML = LEVELS.slice(0, -1)
-    .map((_, n) => `<div class="${n < lv ? (lv === 9 ? "boss" : "yes") : ""}" title="${LEVELS[n + 1]} : ${state.thresholds[n + 1]} pts"></div>`)
-    .join("");
-}
-
-// Compteurs toujours affichés : trouvés / total par lettre initiale et par longueur.
-function renderCounters() {
-  const c = counters(state.solutions, state.found);
-  const chip = (label, v) =>
-    `<div class="chip${v.found === v.total ? " done" : ""}"><b>${label}</b><span>${v.found}/${v.total}</span></div>`;
-  $("by-letter").innerHTML = Object.keys(c.byLetter).sort().map((k) => chip(k, c.byLetter[k])).join("");
-  $("by-length").innerHTML = Object.keys(c.byLength).sort((a, b) => a - b)
-    .map((k) => chip(`${k} lettres`, c.byLength[k])).join("");
+  $("niveau").textContent = LEVELS[lv];
+  $("mots").textContent = plural(state.found.length, "mot");
+  $("points").textContent = plural(s, "point");
+  [...$("progression").children].forEach((d, n) => {
+    d.className = n < lv ? (lv === 9 ? "boss" : "yes") : "";
+  });
 }
 
 function renderFound() {
-  $("found-list").textContent = state.found.map(cap).join(" ") || "Aucun mot pour l'instant.";
+  const typed = currentWord();
+  const words = state.found.map((w) =>
+    typed && w.startsWith(typed) ? `<u>${cap(typed)}</u>${w.slice(typed.length).toLowerCase()}` : cap(w));
+  let html = words.join(" ");
+  if (state.failed.length) html += (html ? "<br>" : "") + state.failed.map((w) => `<del>${cap(w)}</del>`).join(" ");
+  const n = state.found.length + state.failed.length;
+  const el = $("reponses");
+  el.className = "reponses" + (n > 75 ? " smaller" : n > 50 ? " small" : "");
+  el.innerHTML = html;
+  $("inside").scrollTop = $("inside").scrollHeight;
+}
+
+// ---------- Informations et solutions ----------
+function fillInformations() {
+  $("info-day").textContent = `#${state.day}`;
+  $("info-words").textContent = state.solutions.length;
+  $("info-total").textContent = state.total;
+  $("info-levels").innerHTML = LEVELS.slice(1, -1).map((l, i) => `<li>${l} : ${state.thresholds[i + 1]}</li>`).join("");
+}
+
+function fillSolutions() {
+  const day = state.day - 1;
+  const letters = [...gridForDay(state.gridData, day)];
+  const sol = solve(letters, state.trie);
+  $("sol-day").textContent = `#${day}`;
+  $("sol-grid").innerHTML = letters.map((c) => `<div>${c}</div>`).join("");
+  const prevFound = new Set(JSON.parse(store.get(`labog:${day}:found`) || "[]"));
+  let html = "";
+  for (let c = 65; c <= 90; c++) {
+    const ch = String.fromCharCode(c);
+    const ws = sol.filter((w) => w[0] === ch);
+    if (ws.length) html += `<li>${ws.map((w) => (prevFound.has(w) ? `<i>${w.toLowerCase()}</i>` : w.toLowerCase())).join(" ")}</li>`;
+  }
+  $("sol-list").innerHTML = html;
 }
 
 // ---------- Multijoueur ----------
@@ -250,8 +383,7 @@ function renderPlayers() {
   const list = Object.entries(state.others).map(([uid, p]) => ({ uid, ...p }));
   if (!myUid) list.push({ uid: "me", name: state.name, score: s, level: myLevel, words: state.found.join(" ") });
   list.sort((a, b) => b.score - a.score);
-  const esc = (t) => String(t).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
-  $("players").innerHTML = list.map((p) => {
+  $("players-list").innerHTML = list.map((p) => {
     const me = p.uid === myUid || p.uid === "me";
     const words = (p.words || "").split(" ").filter(Boolean);
     let detail = "";
@@ -260,7 +392,7 @@ function renderPlayers() {
         ? `<p class="theirs">${words.map((w) => (state.found.includes(w) ? cap(w) : `<mark>${cap(w)}</mark>`)).join(" ") || "—"}</p>`
         : `<p class="locked">Atteignez « ${LEVELS[GENIAL]} » pour voir leurs mots.</p>`;
     }
-    return `<li class="${me ? "me" : ""}"><div class="head"><span>${esc(p.name)}${me ? " (vous)" : ""}</span>` +
+    return `<li class="${me ? "me" : ""}"><div class="head"><b>${esc(p.name)}${me ? " (vous)" : ""}</b>` +
       `<span>${LEVELS[p.level] ?? ""} · ${plural(words.length, "mot")} · ${p.score} pt</span></div>${detail}</li>`;
   }).join("");
 }
@@ -269,18 +401,13 @@ function renderPlayers() {
 async function share() {
   const s = score(), lv = levelFor(s, state.thresholds);
   const text = `LaBOG multi n°${state.day} : ${LEVELS[lv]} — ${plural(state.found.length, "mot")}, ${plural(s, "point")} sur ${state.total}\n${location.href}`;
-  const btn = $("share");
-  const flash = (label) => {
-    btn.textContent = label;
-    setTimeout(() => (btn.textContent = "Partager"), 2000);
-  };
   if (navigator.share) {
     try { await navigator.share({ text }); return; }
     catch (e) { if (e.name === "AbortError") return; /* sinon, repli sur la copie */ }
   }
   try {
     await navigator.clipboard.writeText(text);
-    flash("Copié ✓");
+    message("Copié ✓", 1200);
   } catch {
     const ta = document.createElement("textarea");
     ta.value = text;
@@ -290,8 +417,9 @@ async function share() {
     ta.select();
     const ok = document.execCommand("copy");
     document.body.removeChild(ta);
-    if (ok) flash("Copié ✓"); else prompt("Copiez ce texte :", text);
+    if (ok) message("Copié ✓", 1200); else prompt("Copiez ce texte :", text);
   }
 }
 
-init().catch((e) => { console.error(e); $("message").textContent = "Erreur de chargement."; });
+window.addEventListener("resize", drawTrace);
+init().catch((e) => { console.error(e); message("Erreur de chargement.", 5000); });
