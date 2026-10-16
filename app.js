@@ -4,6 +4,8 @@ import {
 } from "./game.js";
 import { connect } from "./net.js";
 
+// Même numéro de version que app.js (voir stamp.mjs), pour contourner le cache des données.
+const V = new URL(import.meta.url).search;
 const $ = (id) => document.getElementById(id);
 const store = {
   get(k) { try { return localStorage.getItem(k); } catch { return null; } },
@@ -28,8 +30,8 @@ const state = {
 // ---------- Initialisation ----------
 async function init() {
   const [wordsTxt, gridData] = await Promise.all([
-    fetch("words.txt").then((r) => r.text()),
-    fetch("grids.json").then((r) => r.json()),
+    fetch("words.txt" + V).then((r) => r.text()),
+    fetch("grids.json" + V).then((r) => r.json()),
   ]);
   const trie = new PrefixTrie(wordsTxt.split("\n").filter(Boolean));
   state.letters = [...gridForDay(gridData, state.day)];
