@@ -175,11 +175,13 @@ function render() {
 
 function renderBoard() {
   const c = counters(state.solutions, state.found);
+  // Une lettre est grisée quand plus aucun mot restant ne la contient (pas seulement en initiale).
+  const remaining = state.solutions.filter((w) => !state.found.includes(w));
   cells.forEach((b, i) => {
     const ch = state.letters[i];
-    const left = (c.byLetter[ch]?.total ?? 0) - (c.byLetter[ch]?.found ?? 0);
-    b.innerHTML = `${ch}<em>${left}</em>`;
-    b.classList.toggle("zero", left === 0);
+    const startingWith = (c.byLetter[ch]?.total ?? 0) - (c.byLetter[ch]?.found ?? 0);
+    b.innerHTML = `${ch}<em>${startingWith}</em>`;
+    b.classList.toggle("zero", !remaining.some((w) => w.includes(ch)));
   });
   renderSelection();
 }
