@@ -1,10 +1,10 @@
-// Collez ici la config de votre application web Firebase (console Firebase > Paramètres du projet).
-// Cette config n'est pas secrète : la sécurité repose sur database.rules.json.
-// Tant que les valeurs commencent par "VOTRE", le jeu fonctionne en solo.
+// Config de l'application web Firebase. Elle n'est pas secrète : la sécurité repose sur database.rules.json.
 export const firebaseConfig = {
-  apiKey: "VOTRE_API_KEY",
-  authDomain: "VOTRE_PROJET.firebaseapp.com",
-  databaseURL: "https://VOTRE_PROJET-default-rtdb.europe-west1.firebasedatabase.app",
-  projectId: "VOTRE_PROJET",
-  appId: "VOTRE_APP_ID",
+  apiKey: "AIzaSyBH3QhpdgCY9lyCX8JlTvVWIdqozWunrVE",
+  authDomain: "collabog.firebaseapp.com",
+  databaseURL: "https://collabog-default-rtdb.europe-west1.firebasedatabase.app",
+  projectId: "collabog",
+  storageBucket: "collabog.firebasestorage.app",
+  messagingSenderId: "64199387625",
+  appId: "1:64199387625:web:ac719807153fde192b0378",
 };
