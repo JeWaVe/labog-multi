@@ -265,8 +265,29 @@ function renderPlayers() {
 async function share() {
   const s = score(), lv = levelFor(s, state.thresholds);
   const text = `LaBOG multi n°${state.day} : ${LEVELS[lv]} — ${plural(state.found.length, "mot")}, ${plural(s, "point")} sur ${state.total}\n${location.href}`;
-  try { await navigator.clipboard.writeText(text); say("Copié dans le presse-papier", true); }
-  catch { prompt("Copiez ce texte :", text); }
+  const btn = $("share");
+  const flash = (label) => {
+    btn.textContent = label;
+    setTimeout(() => (btn.textContent = "Partager"), 2000);
+  };
+  if (navigator.share) {
+    try { await navigator.share({ text }); return; }
+    catch (e) { if (e.name === "AbortError") return; /* sinon, repli sur la copie */ }
+  }
+  try {
+    await navigator.clipboard.writeText(text);
+    flash("Copié ✓");
+  } catch {
+    const ta = document.createElement("textarea");
+    ta.value = text;
+    ta.style.position = "fixed";
+    ta.style.opacity = "0";
+    document.body.appendChild(ta);
+    ta.select();
+    const ok = document.execCommand("copy");
+    document.body.removeChild(ta);
+    if (ok) flash("Copié ✓"); else prompt("Copiez ce texte :", text);
+  }
 }
 
 init().catch((e) => { console.error(e); $("message").textContent = "Erreur de chargement."; });
