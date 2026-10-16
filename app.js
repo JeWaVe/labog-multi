@@ -79,35 +79,53 @@ function buildBoard() {
   let gesture = false; // un geste est en cours sur la grille
   let dragged = false; // ce geste a ajouté des lettres en glissant
 
-  const keyAt = (e) => {
-    const el = document.elementFromPoint(e.clientX, e.clientY);
+  // Touche visée en (x, y), à condition d'être près de son centre : cela évite les
+  // diagonales accidentelles quand le doigt coupe le coin d'une case voisine.
+  const keyAt = (x, y) => {
+    const el = document.elementFromPoint(x, y);
     const btn = el && el.closest && el.closest("#grid button");
     if (!btn) return null;
     const r = btn.getBoundingClientRect();
-    // il faut viser le centre de la touche pour éviter les diagonales accidentelles
-    const dx = Math.abs(e.clientX - (r.left + r.right) / 2), dy = Math.abs(e.clientY - (r.top + r.bottom) / 2);
-    return dx < r.width * 0.32 && dy < r.height * 0.32 ? keys.indexOf(btn) : null;
+    const dx = Math.abs(x - (r.left + r.right) / 2), dy = Math.abs(y - (r.top + r.bottom) / 2);
+    return dx < r.width * 0.38 && dy < r.height * 0.38 ? keys.indexOf(btn) : null;
+  };
+
+  let prev = null; // dernier point traité du geste
+  // Un glissé rapide saute des points : on teste aussi des points intermédiaires sur le segment.
+  const visit = (x, y) => {
+    if (prev) {
+      const dist = Math.hypot(x - prev.x, y - prev.y), steps = Math.ceil(dist / 8);
+      for (let s = 1; s < steps; s++) hit(keyAt(prev.x + ((x - prev.x) * s) / steps, prev.y + ((y - prev.y) * s) / steps));
+    }
+    hit(keyAt(x, y));
+    prev = { x, y };
+  };
+  const hit = (i) => {
+    if (i === null) return;
+    const n = state.sel.length;
+    if (n > 1 && i === state.sel[n - 2]) { state.sel.pop(); renderPlay(); }
+    else if (canAdd(i)) { state.sel.push(i); dragged = true; renderPlay(); }
   };
 
   grid.addEventListener("pointerdown", (e) => {
     if (state.locked) return;
-    const i = keyAt(e);
+    const i = keyAt(e.clientX, e.clientY);
     if (i === null) return;
+    e.preventDefault();
     grid.setPointerCapture(e.pointerId);
     gesture = true;
     dragged = false;
+    prev = { x: e.clientX, y: e.clientY };
     if (i === state.sel[state.sel.length - 1]) state.sel.pop();
     else if (canAdd(i)) state.sel.push(i);
     renderPlay();
   });
   grid.addEventListener("pointermove", (e) => {
     if (!gesture || state.locked) return;
-    const i = keyAt(e);
-    if (i === null) return;
-    const n = state.sel.length;
-    if (n > 1 && i === state.sel[n - 2]) { state.sel.pop(); renderPlay(); }
-    else if (canAdd(i)) { state.sel.push(i); dragged = true; renderPlay(); }
+    const pts = e.getCoalescedEvents ? e.getCoalescedEvents() : [];
+    for (const p of pts.length ? pts : [e]) visit(p.clientX, p.clientY);
   });
+  grid.addEventListener("contextmenu", (e) => e.preventDefault());
   const end = () => {
     // on ne valide au relâchement qu'après un glissé ; un simple appui ne valide jamais
     if (gesture && dragged && state.sel.length >= 2) submit();
