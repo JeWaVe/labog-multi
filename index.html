@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>LaBOG multijoueur</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<main>
+  <header>
+    <h1>La<b>BOG</b> <small>multi</small></h1>
+    <div id="status"><span id="level"></span> · <span id="words">0 mot</span> · <span id="score">0 point</span></div>
+    <div id="progress" aria-label="Progression"></div>
+  </header>
+
+  <section class="play">
+    <div id="current" aria-live="polite">&nbsp;</div>
+    <div id="message" aria-live="assertive"></div>
+    <div id="board" role="group" aria-label="Grille"></div>
+    <div class="actions">
+      <button id="back">Effacer</button>
+      <button id="shuffle" title="Faire pivoter la grille">Pivoter</button>
+      <button id="enter" class="primary">Valider</button>
+    </div>
+  </section>
+
+  <section class="counters" aria-label="Compteurs">
+    <h2>Mots commençant par…</h2>
+    <div id="by-letter" class="chips"></div>
+    <h2>Mots de…</h2>
+    <div id="by-length" class="chips"></div>
+  </section>
+
+  <section class="found">
+    <h2>Vos mots</h2>
+    <p id="found-list"></p>
+  </section>
+
+  <section class="players">
+    <h2>Joueurs du jour <small id="net-state"></small></h2>
+    <ul id="players"></ul>
+  </section>
+
+  <footer>
+    <button id="share">Partager</button>
+    <button id="rename">Changer de pseudo</button>
+    <p>Mots de 4 à 9 lettres, dictionnaire Grammalecte. Verbes à l'infinitif et aux participes, pas de noms propres.
+    4 lettres = 1 point, 5 = 5, 6 = 6, 7 = 7, 8 = 8, 9 = 9. Nouvelle grille chaque jour à minuit UTC.</p>
+  </footer>
+</main>
+<script type="module" src="app.js"></script>
+</body>
+</html>

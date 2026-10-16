@@ -1,0 +1,51 @@
+:root { --bg:#f6f4ef; --fg:#222; --card:#fff; --accent:#2f6fed; --muted:#777; --ok:#2e9e5b; --line:#ddd; --done:#e6f4ea; }
+@media (prefers-color-scheme: dark) {
+  :root { --bg:#16181d; --fg:#e8e8e8; --card:#222630; --accent:#6a9bff; --muted:#9aa; --ok:#4ec283; --line:#3a3f4b; --done:#1f3a2b; }
+}
+* { box-sizing: border-box; }
+body { margin:0; background:var(--bg); color:var(--fg); font:16px/1.4 system-ui, sans-serif; }
+main { max-width:520px; margin:0 auto; padding:12px 16px 40px; }
+h1 { margin:8px 0 4px; letter-spacing:.05em; } h1 small { font-size:.45em; color:var(--muted); font-weight:400; }
+h2 { font-size:.9rem; margin:16px 0 6px; color:var(--muted); font-weight:600; text-transform:uppercase; letter-spacing:.04em; }
+#status { font-weight:600; }
+#progress { display:flex; gap:3px; margin:8px 0; }
+#progress div { flex:1; height:8px; border-radius:4px; background:var(--line); }
+#progress div.yes { background:var(--accent); } #progress div.boss { background:var(--ok); }
+
+#current { height:2.2rem; font-size:1.6rem; text-align:center; letter-spacing:.15em; font-weight:700; }
+#message { height:1.4rem; text-align:center; color:var(--muted); }
+#message.good { color:var(--ok); font-weight:600; }
+#board { position:relative; display:grid; grid-template-columns:repeat(4,1fr); gap:8px; touch-action:none; user-select:none; margin:6px auto; max-width:360px; }
+#board.shake { animation: shake .4s; }
+@keyframes shake { 25%{transform:rotate(-4deg)} 75%{transform:rotate(4deg)} }
+.cell { aspect-ratio:1; border:2px solid var(--line); border-radius:12px; background:var(--card); color:var(--fg);
+  font-size:1.9rem; font-weight:700; position:relative; cursor:pointer; padding:0; }
+.cell.sel { background:var(--accent); color:#fff; border-color:var(--accent); }
+.cell.last { outline:3px solid var(--ok); }
+.cell em { position:absolute; right:6px; bottom:3px; font-size:.65rem; font-style:normal; font-weight:600; color:var(--muted); }
+.cell.sel em { color:#fff; }
+.cell.zero { opacity:.45; }
+.actions { display:flex; gap:8px; justify-content:center; margin-top:10px; }
+button { font:inherit; padding:8px 14px; border-radius:8px; border:1px solid var(--line); background:var(--card); color:var(--fg); cursor:pointer; }
+button.primary { background:var(--accent); border-color:var(--accent); color:#fff; font-weight:600; }
+
+/* Compteurs permanents : toujours visibles, aucun bouton pour les afficher */
+.chips { display:flex; flex-wrap:wrap; gap:6px; }
+.chip { display:flex; gap:6px; align-items:baseline; padding:3px 9px; border-radius:999px; background:var(--card); border:1px solid var(--line); font-size:.9rem; }
+.chip b { font-size:1rem; }
+.chip span { color:var(--muted); font-variant-numeric:tabular-nums; }
+.chip.done { background:var(--done); border-color:var(--ok); }
+.chip.done span { color:var(--ok); }
+
+#found-list { margin:0; line-height:1.8; }
+#found-list u { text-decoration:none; background:var(--done); border-radius:4px; padding:1px 4px; }
+.players ul { list-style:none; margin:0; padding:0; }
+.players li { background:var(--card); border:1px solid var(--line); border-radius:10px; padding:8px 10px; margin-bottom:6px; }
+.players li.me { border-color:var(--accent); }
+.players .head { display:flex; justify-content:space-between; gap:8px; font-weight:600; }
+.players .head span:last-child { color:var(--muted); font-weight:400; white-space:nowrap; }
+.players .theirs { margin:6px 0 0; font-size:.85rem; color:var(--muted); line-height:1.6; }
+.players .theirs mark { background:var(--done); color:var(--fg); border-radius:3px; padding:0 3px; }
+.players .locked { margin:6px 0 0; font-size:.8rem; color:var(--muted); font-style:italic; }
+footer { margin-top:24px; font-size:.8rem; color:var(--muted); }
+footer button { margin-right:6px; }
