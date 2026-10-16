@@ -73,7 +73,7 @@ function buildBoard() {
   cases = [...$("plateau").children];
 
   const grid = $("grid");
-  grid.innerHTML = state.letters.map((_, i) => `<button id="key${i}"></button>`).join("");
+  grid.innerHTML = state.letters.map((c, i) => `<button id="key${i}">${c}<em>0</em></button>`).join("");
   keys = [...grid.children];
 
   let gesture = false; // un geste est en cours sur la grille
@@ -88,6 +88,13 @@ function buildBoard() {
     const r = btn.getBoundingClientRect();
     const dx = Math.abs(x - (r.left + r.right) / 2), dy = Math.abs(y - (r.top + r.bottom) / 2);
     return dx < r.width * 0.38 && dy < r.height * 0.38 ? keys.indexOf(btn) : null;
+  };
+
+  // Au départ du geste, toute la surface de la touche compte (le centre n'est exigé qu'ensuite).
+  const keyUnder = (x, y) => {
+    const el = document.elementFromPoint(x, y);
+    const btn = el && el.closest && el.closest("#grid button");
+    return btn ? keys.indexOf(btn) : null;
   };
 
   let prev = null; // dernier point traité du geste
@@ -109,10 +116,10 @@ function buildBoard() {
 
   grid.addEventListener("pointerdown", (e) => {
     if (state.locked) return;
-    const i = keyAt(e.clientX, e.clientY);
+    const i = keyUnder(e.clientX, e.clientY);
     if (i === null) return;
     e.preventDefault();
-    grid.setPointerCapture(e.pointerId);
+    try { grid.setPointerCapture(e.pointerId); } catch { /* sans capture, les événements arrivent quand même */ }
     gesture = true;
     dragged = false;
     prev = { x: e.clientX, y: e.clientY };
@@ -308,7 +315,9 @@ function renderPlay() {
       else if (cls === "key-no") cls += " key-zero";
     }
     k.className = cls;
-    k.innerHTML = `${ch}<em>${starting}</em>`;
+    // mise à jour sur place : ne pas recréer le nœud sous le doigt pendant un geste
+    k.firstChild.nodeValue = ch;
+    k.lastChild.textContent = starting;
   });
 
   $("shuffle").className = state.sel.length ? "disable" : "";
